@@ -1,0 +1,15 @@
+services:
+  backend:
+    build:
+      context: ./kukangsort-backend/backend
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend.Dockerfile
+    ports:
+      - "5500:80"
+    depends_on:
+      - backend
