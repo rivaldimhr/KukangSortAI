@@ -46,6 +46,22 @@ Untuk mematikan sementara: set `VERIFY_ENABLED = False` di `inference.py`.
         |-- verifier_best.pt   # best.pt group-aware
         `-- yolo11x.pt         # detektor
 
+## Download model (WAJIB sebelum jalan / build Docker)
+
+File `*.pt` di `models/` di-gitignore (bukan bagian repo). Download dulu dari
+GitHub Release repo ini, lalu taruh 5 file berikut persis di `backend/models/`:
+
+- `sortir_best.pt`
+- `kukang_behaviour_best.pt`
+- `behaviour_best_crop.pt`
+- `verifier_best.pt`
+- `yolo11n.pt`
+
+Link: <!-- TODO: isi link GitHub Release setelah model diupload sebagai asset -->
+
+Tanpa file ini, `uvicorn` / `docker compose up --build` akan gagal saat startup
+(model tidak ditemukan).
+
 ## Menjalankan
 
     # (opsional, Windows/Anaconda) cegah crash OpenMP:
