@@ -6,6 +6,52 @@ YOLO11n-cls: **sortir** (kukang/unknown/delete) dan **behavior**
 `kukang_behaviour.ipynb`, jadi input model saat inference identik dengan
 saat training.
 
+## Prasyarat
+
+- **Tanpa Docker:** Python 3.11, `venv` sudah tersedia di
+  `kukangsort-backend/backend/venv` (kalau belum ada, lihat langkah manual di
+  bawah).
+- **Dengan Docker:** Docker Desktop terinstall (Windows/Mac) atau Docker
+  Engine + Compose plugin (Linux).
+- Model `.pt` di `kukangsort-backend/backend/models/` — lihat
+  [README backend](kukangsort-backend/backend/README.md#download-model-wajib-sebelum-jalan--build-docker)
+  untuk cara mendapatkannya kalau folder itu kosong.
+
+## Cara Menjalankan
+
+**Opsi A — tanpa Docker (paling cepat di laptop sendiri, Windows):**
+
+```powershell
+cd D:\kukangsort-ai-2tahap
+.\start.bat
+```
+
+Otomatis menyalakan backend (port 8000), server frontend (port 5500), dan
+membuka `http://localhost:5500/kukangsort-ai.html` di browser.
+
+**Opsi B — dengan Docker (portable, bisa dicoba di komputer lain):**
+
+```bash
+docker compose up --build
+```
+
+Lalu buka `http://localhost:5500`. Backend jalan di `http://localhost:8000`.
+
+**Opsi C — manual (kalau mau kontrol penuh / debugging):**
+
+```bash
+cd kukangsort-backend/backend
+python -m venv venv
+venv\Scripts\activate           # Linux/Mac: source venv/bin/activate
+pip install -r requirements.txt
+uvicorn main:app --reload --port 8000
+```
+
+Buka `kukangsort-ai.html` lewat server HTTP lokal (`python -m http.server 5500`
+di root proyek), jangan langsung double-click file HTML — browser modern
+(Chrome) memblokir fetch dari `file://` ke `localhost` karena kebijakan
+Private Network Access.
+
 ## Struktur
 
 ```
