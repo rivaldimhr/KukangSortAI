@@ -1,0 +1,40 @@
+name: Model check + demo
+
+# Runs the real KukangSort models (CPU) on the sample photos.
+# Fails if a model cannot be loaded or the API errors, and publishes the
+# static demo (page + real results) to the gh-pages branch.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  demo:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: System libraries for OpenCV
+        run: sudo apt-get update -q && sudo apt-get install -y -q libgl1 libglib2.0-0
+      - name: Install CPU PyTorch and backend requirements
+        run: |
+          pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+          pip install -r kukangsort-backend/backend/requirements.txt httpx
+      - name: Run the models on the sample photos
+        run: python scripts/build_demo.py
+      - name: Show results
+        run: cat site/demo/results.json
+      - name: Publish to gh-pages
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        run: |
+          cd site
+          git init -q -b gh-pages
+          git add -A
+          git -c user.name="github-actions" -c user.email="github-actions@users.noreply.github.com" commit -q -m "Demo build ${GITHUB_SHA}"
+          git push -q --force "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" gh-pages
