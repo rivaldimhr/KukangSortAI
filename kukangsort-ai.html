@@ -504,7 +504,7 @@ footer{
               <div class="fact"><b>Ciri</b><span>Garis punggung tegas, topeng wajah gelap</span></div>
               <div class="fact"><b>Pakan</b><span>Getah, gum, nektar, serangga</span></div>
             </div>
-            <div class="credit">Ganti gambar dengan foto camera trap milik sendiri atau Wikimedia Commons (CC).</div>
+            <div class="credit">Ilustrasi, bukan foto spesies ini.</div>
           </div>
         </div>
 
@@ -520,7 +520,7 @@ footer{
               <div class="fact"><b>Ciri</b><span>Garis punggung lebih samar, warna lebih terang</span></div>
               <div class="fact"><b>Pakan</b><span>Getah, gum, buah, serangga</span></div>
             </div>
-            <div class="credit">Ganti gambar dengan foto camera trap milik sendiri atau Wikimedia Commons (CC).</div>
+            <div class="credit">Ilustrasi, bukan foto spesies ini.</div>
           </div>
         </div>
       </div>
@@ -567,9 +567,9 @@ footer{
           <div class="spec-row"><span>Per kelas</span><span>±350 foto</span></div>
           <div class="spec-row"><span>Resolusi input</span><span>224 × 224</span></div>
           <div class="spec-row"><span>Preprocessing</span><span>CLAHE + unsharp</span></div>
-          <div class="spec-row"><span>Akurasi</span><span><b>lihat catatan*</b></span></div>
+          <div class="spec-row"><span>Akurasi</span><span>belum dicantumkan</span></div>
         </div>
-        <p style="margin-top:14px; font-size:12px; color:var(--ir-dim)">*Isi angka akurasi sortir dari notebook pelatihanmu.</p>
+        <p style="margin-top:14px; font-size:12px; color:var(--ir-dim)">Hasil model asli pada foto contoh bisa dilihat langsung di bagian demo di bawah.</p>
       </div>
 
       <div class="spec-card">
@@ -640,7 +640,9 @@ footer{
               <div style="display:flex; gap:10px; justify-content:center; flex-wrap:wrap">
                 <button class="btn btn-primary" id="pickBtn">Pilih folder</button>
                 <button class="btn btn-ghost" id="pickFilesBtn">Pilih berkas satuan</button>
+                <button class="btn btn-primary" id="demoBtn" hidden>Muat foto contoh</button>
               </div>
+              <p id="demoNote" hidden style="margin-top:10px; font-size:12px">Demo online: foto contoh diproses oleh model asli lewat GitHub Actions. Foto lain butuh backend yang berjalan.</p>
               <input type="file" id="dirInput" accept="image/*" webkitdirectory directory multiple hidden>
               <input type="file" id="fileInput" accept="image/*" multiple hidden>
               <small>JPG · PNG · maks 5.000 berkas per batch</small>
@@ -910,16 +912,27 @@ footer{
 
 <script>
 /* ============================================================
-   TEMPLATE — semua angka di bawah berasal dari fungsi tiruan.
-   Sambungkan ke backend dengan mengganti isi classifyBatch()
-   dan classifyBehavior() (lihat komentar TODO).
+   SUMBER HASIL
+   1. Backend FastAPI (model asli). Default: http://localhost:8000 saat
+      halaman dibuka dari komputer sendiri. Bisa diganti lewat ?api=URL.
+   2. Mode demo (GitHub Pages): hasil ASLI model untuk foto contoh,
+      dibuat oleh GitHub Actions (scripts/build_demo.py -> demo/results.json).
+   3. Simulasi acak hanya bila diminta secara eksplisit lewat ?simulasi=1.
    ============================================================ */
-/* ============================================================
-   BACKEND — arahkan ke FastAPI. Kosongkan (API_BASE = '') untuk
-   memakai mode simulasi (probabilitas acak) tanpa server.
-   ============================================================ */
-const API_BASE = 'http://localhost:8000';   // ganti ke domain server saat produksi
+const params = new URLSearchParams(location.search);
+const IS_LOCAL = ['localhost', '127.0.0.1', ''].includes(location.hostname);
+const API_BASE = params.get('api') || (IS_LOCAL ? 'http://localhost:8000' : '');
+const SIMULATE = params.get('simulasi') === '1';
 let backendOn = false;
+let DEMO = null;   // {files: {nama: {size, sort, behavior}}} bila mode demo aktif
+
+async function loadDemo(){
+  try {
+    const r = await fetch('demo/results.json', {cache: 'no-store'});
+    if (!r.ok) return null;
+    return await r.json();
+  } catch { return null; }
+}
 
 async function pingBackend(){
   if (!API_BASE) return false;
@@ -941,11 +954,21 @@ setInterval(() => {
   $('#osdClock2').textContent = t;
 }, 1000);
 
-pingBackend().then(on => {
+pingBackend().then(async on => {
   const el = $('#runLog');
-  if (on) el.textContent = 'Backend tersambung — memakai model asli.';
-  else if (API_BASE) el.textContent = 'Backend tidak terjangkau — mode simulasi (probabilitas acak).';
-  else el.textContent = 'Mode simulasi aktif.';
+  if (on){ el.textContent = 'Backend tersambung — memakai model asli.'; return; }
+  DEMO = await loadDemo();
+  if (DEMO){
+    const n = Object.keys(DEMO.files).length;
+    el.textContent = `Mode demo: hasil ASLI model untuk ${n} foto camera trap contoh. Klik "Muat foto contoh". Untuk foto sendiri, jalankan backend (lihat README).`;
+    $('#demoBtn').hidden = false;
+    $('#demoNote').hidden = false;
+  } else if (SIMULATE){
+    el.textContent = 'Mode simulasi: probabilitas ACAK, bukan hasil model.';
+  } else {
+    el.textContent = API_BASE ? 'Backend tidak terjangkau di ' + API_BASE + '. Jalankan backend dulu (lihat README).'
+                              : 'Backend belum diatur. Tambahkan ?api=URL-backend di alamat halaman.';
+  }
 });
 
 /* ---------- Nav: state saat scroll + scroll-spy ---------- */
@@ -993,6 +1016,17 @@ const dirInput = $('#dirInput'), fileInput = $('#fileInput'), drop = $('#drop');
 let skipped = 0;
 
 $('#pickBtn').addEventListener('click', () => dirInput.click());
+$('#demoBtn').addEventListener('click', async () => {
+  if (!DEMO) return;
+  log('Mengambil foto contoh…');
+  const files = [];
+  for (const name of Object.keys(DEMO.files)){
+    const r = await fetch('demo/' + encodeURIComponent(name));
+    if (!r.ok) continue;
+    files.push(new File([await r.blob()], name, {type: 'image/jpeg', lastModified: Date.now()}));
+  }
+  addFiles(files);
+});
 $('#pickFilesBtn').addEventListener('click', () => fileInput.click());
 dirInput.addEventListener('change', e => addFiles([...e.target.files]));
 fileInput.addEventListener('change', e => addFiles([...e.target.files]));
@@ -1032,7 +1066,15 @@ async function walk(entry, out, base=''){
 }
 
 async function addFiles(list){
-  const all = [...list];
+  let all = [...list];
+  if (!backendOn && DEMO){
+    const ok = all.filter(f => DEMO.files[f.name] && DEMO.files[f.name].size === f.size);
+    if (ok.length < all.length)
+      alert((all.length - ok.length) + ' berkas tidak bisa diproses di demo online. ' +
+            'Demo hanya punya hasil model untuk foto contoh. Untuk foto sendiri, jalankan backend di komputermu (lihat README).');
+    all = ok;
+    if (!all.length) return renderTree();
+  }
   const files = all.filter(f => f.type.startsWith('image/'));
   skipped += all.length - files.length;
   if (!files.length){
@@ -1209,7 +1251,12 @@ $('#runSort').addEventListener('click', async () => {
   $('#runSort').disabled = true;
   $('#progWrap').hidden = false;
   for (let i = 0; i < state.items.length; i++){
-    await classifyBatch(state.items[i]);
+    try { await classifyBatch(state.items[i]); }
+    catch (e){
+      log(e.message + '. Jalankan backend (lihat README) lalu muat ulang halaman.');
+      $('#progWrap').hidden = true; $('#runSort').disabled = false;
+      return;
+    }
     $('#progBar').style.width = ((i+1)/state.items.length*100) + '%';
     log('Memproses ' + (i+1) + ' dari ' + state.items.length + ' · ' + state.items[i].name);
     if (i % 4 === 0) await new Promise(r => setTimeout(r, 16));
@@ -1223,12 +1270,23 @@ $('#runSort').addEventListener('click', async () => {
   renderTree(); 
 });
 
-/* TODO: sambungkan ke backend.
-   const fd = new FormData(); fd.append('image', item.file);
-   const r = await fetch('/api/classify', {method:'POST', body:fd});
-   const d = await r.json(); item.kelas = d.kelas; item.prob = d.prob; */
-/* Sortir satu citra. Pakai backend kalau hidup, kalau tidak simulasi. */
+/* Terapkan hasil /api/sort (dari backend atau dari hasil demo). */
+function applySort(item, d){
+  item.prob = d.prob;                      // {kukang, unknown, delete}
+  item.kelas = d.kelas;
+  item.reviewS = !!d.perlu_review;         // kukang yg tak lolos verifikasi crop
+  item.blur = d.blur;
+  item.blurAfter = d.blur_after != null ? d.blur_after : null;
+  if (d.waktu){ item.taken = new Date(d.waktu); item.timeSrc = d.sumber_waktu || 'exif'; }
+  if (d.nama_baru) item.name = d.nama_baru;
+}
+
+/* Sortir satu citra: backend -> hasil demo -> (simulasi hanya jika ?simulasi=1). */
 async function classifyBatch(item){
+  if (!backendOn && DEMO && DEMO.files[item.orig]){
+    applySort(item, DEMO.files[item.orig].sort);
+    return;
+  }
   if (backendOn){
     try {
       const fd = new FormData();
@@ -1252,8 +1310,9 @@ async function classifyBatch(item){
       }
       if (d.nama_baru) item.name = d.nama_baru;
       return;
-    } catch (e){ /* jatuh ke simulasi di bawah */ }
+    } catch (e){ /* jatuh ke bawah */ }
   }
+  if (!SIMULATE) throw new Error('Tidak ada backend untuk memproses ' + item.orig);
   const p = [Math.random(), Math.random(), Math.random()];
   const sum = p.reduce((a,b)=>a+b);
   const prob = { kukang:p[0]/sum, unknown:p[1]/sum, delete:p[2]/sum };
@@ -1426,7 +1485,12 @@ $('#runBehavior').addEventListener('click', async () => {
   }
   $('#progWrapB').hidden = false;
   for (let i = 0; i < pool.length; i++){
-    await classifyBehavior(pool[i]);
+    try { await classifyBehavior(pool[i]); }
+    catch (e){
+      log(e.message + '. Jalankan backend (lihat README) lalu muat ulang halaman.', '#runLogB');
+      $('#progWrapB').hidden = true;
+      return;
+    }
     $('#progBarB').style.width = ((i+1)/pool.length*100) + '%';
     log('Membaca perilaku ' + (i+1) + ' dari ' + pool.length, '#runLogB');
     if (i % 4 === 0) await new Promise(r => setTimeout(r, 16));
@@ -1438,9 +1502,14 @@ $('#runBehavior').addEventListener('click', async () => {
   renderBehavior();
 });
 
-/* TODO: ganti dengan panggilan ke model perilaku. */
-/* Behavior satu citra. Backend kalau hidup, kalau tidak simulasi. */
+/* Behavior satu citra: backend -> hasil demo -> (simulasi hanya jika ?simulasi=1). */
 async function classifyBehavior(item){
+  const demo = !backendOn && DEMO && DEMO.files[item.orig];
+  if (demo){
+    const d = demo.behavior;
+    item.probB = d.prob; item.perilaku = d.kelas; item.reviewB = !!d.perlu_review;
+    return;
+  }
   if (backendOn){
     try {
       const fd = new FormData();
@@ -1452,8 +1521,9 @@ async function classifyBehavior(item){
       item.perilaku = d.kelas;
       item.reviewB = !!d.perlu_review;         // beda antar 2 model / ragu / tak terdeteksi
       return;
-    } catch (e){ /* jatuh ke simulasi */ }
+    } catch (e){ /* jatuh ke bawah */ }
   }
+  if (!SIMULATE) throw new Error('Tidak ada backend untuk memproses ' + item.orig);
   const p = [Math.random(), Math.random(), Math.random()];
   const s = p.reduce((a,b)=>a+b);
   item.probB = {makan:p[0]/s, bergerak:p[1]/s, grooming:p[2]/s};
